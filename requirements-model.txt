@@ -1,0 +1,7 @@
+# The real Perch 2.0 model via perch-hoplite. Pulls in TensorFlow (large) and
+# kagglehub. On first use the weights are downloaded from Kaggle Models, so this
+# requires network access to kaggle.com (see README for offline/restricted setups).
+#
+#   pip install -r requirements.txt -r requirements-model.txt
+#
+perch-hoplite[tf]

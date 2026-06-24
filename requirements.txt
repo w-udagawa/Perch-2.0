@@ -1,0 +1,9 @@
+# Web app runtime (lightweight — no TensorFlow). Installs from PyPI.
+# The app runs in mock mode with just these; the real model adds the
+# perch-hoplite dependency in requirements-model.txt.
+fastapi>=0.110
+uvicorn[standard]>=0.29
+python-multipart>=0.0.9
+soundfile>=0.12      # bundles libsndfile; decodes WAV/FLAC/OGG/AIFF
+soxr>=0.3            # high-quality resampling to 32 kHz
+numpy>=1.24

@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.venv/
+venv/
+env/
+
+# Model cache / large artifacts
+models/
+*.savedmodel/
+~/.cache/kagglehub/
+
+# Uploads / scratch
+uploads/
+tmp/
+*.tmp
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/

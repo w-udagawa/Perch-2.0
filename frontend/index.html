@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Perch 2.0 — Wildlife Audio Detector</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <header>
+    <h1>🐦 Perch 2.0 <span class="sub">Wildlife Audio Detector</span></h1>
+    <div id="backend-badge" class="badge" title="active model backend">…</div>
+  </header>
+
+  <main>
+    <section class="card uploader">
+      <p class="hint">
+        Upload a field recording (<strong>WAV / FLAC / OGG</strong>) to detect bird &amp;
+        terrestrial species with Google DeepMind's Perch 2.0. Audio is analysed in 5-second windows.
+      </p>
+
+      <div id="drop" class="drop">
+        <input id="file" type="file" accept=".wav,.flac,.ogg,.oga,.aif,.aiff" />
+        <label for="file">Choose an audio file…</label>
+        <span id="filename" class="filename"></span>
+      </div>
+
+      <div class="controls">
+        <label>
+          Confidence threshold: <output id="thr-val">0.10</output>
+          <input id="threshold" type="range" min="0" max="1" step="0.01" value="0.10" />
+        </label>
+        <label>
+          Top-K / window:
+          <input id="topk" type="number" min="1" max="20" value="5" />
+        </label>
+        <button id="analyze" disabled>Analyze</button>
+      </div>
+
+      <audio id="player" controls hidden></audio>
+      <div id="status" class="status"></div>
+    </section>
+
+    <section id="results" class="card" hidden>
+      <div class="meta" id="meta"></div>
+
+      <h2>Detected species</h2>
+      <table id="summary">
+        <thead>
+          <tr><th>Species</th><th>Scientific name</th><th>Max&nbsp;conf.</th><th>Windows</th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+
+      <h2>Timeline (per 5-second window)</h2>
+      <div id="timeline"></div>
+    </section>
+  </main>
+
+  <footer>
+    Off-the-shelf Perch 2.0 classifier · Apache-2.0 model · scores are multi-label sigmoid probabilities.
+  </footer>
+
+  <script src="/app.js"></script>
+</body>
+</html>

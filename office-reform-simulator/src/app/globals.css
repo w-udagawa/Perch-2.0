@@ -1,0 +1,59 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+body {
+  @apply bg-slate-50 text-slate-800 antialiased;
+}
+
+/* ----- 0〜10 スライダーの見た目（クロスブラウザ） ----- */
+input[type="range"].ors-range {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 8px;
+  border-radius: 9999px;
+  background: linear-gradient(
+    to right,
+    #2563eb var(--ors-fill, 50%),
+    #e2e8f0 var(--ors-fill, 50%)
+  );
+  outline: none;
+  cursor: pointer;
+}
+
+input[type="range"].ors-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 26px;
+  height: 26px;
+  border-radius: 9999px;
+  background: #ffffff;
+  border: 3px solid #2563eb;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.25);
+  cursor: pointer;
+  transition: transform 0.1s ease;
+}
+
+input[type="range"].ors-range::-webkit-slider-thumb:active {
+  transform: scale(1.15);
+}
+
+input[type="range"].ors-range::-moz-range-thumb {
+  width: 24px;
+  height: 24px;
+  border-radius: 9999px;
+  background: #ffffff;
+  border: 3px solid #2563eb;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.25);
+  cursor: pointer;
+}
+
+/* スクロールバー控えめに */
+* {
+  scrollbar-width: thin;
+}

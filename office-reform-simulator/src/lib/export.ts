@@ -35,8 +35,11 @@ export function downloadBlob(content: string, filename: string, mime: string) {
   a.download = filename;
   document.body.appendChild(a);
   a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  // クリック直後に revoke するとブラウザによってはDLが中断されるため遅延させる
+  setTimeout(() => {
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, 1000);
 }
 
 export function timestampSlug(iso: string): string {

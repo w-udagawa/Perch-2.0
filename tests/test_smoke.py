@@ -79,8 +79,28 @@ def test_predict_endpoint(tmp_path):
 def test_rejects_unsupported_extension(tmp_path):
     from backend.main import app
 
-    mp3 = tmp_path / "x.mp3"
-    mp3.write_bytes(b"not really audio")
+    m4a = tmp_path / "x.m4a"
+    m4a.write_bytes(b"not really audio")
     with TestClient(app) as client:
-        resp = client.post("/api/predict", files={"file": ("x.mp3", open(mp3, "rb"), "audio/mpeg")})
+        resp = client.post("/api/predict", files={"file": ("x.m4a", open(m4a, "rb"), "audio/mp4")})
     assert resp.status_code == 400
+
+
+def test_accepts_mp3(tmp_path):
+    """MP3 is decodable via libsndfile's bundled MPEG component (no ffmpeg)."""
+    from backend.main import app
+
+    mp3 = tmp_path / "tone.mp3"
+    t = np.linspace(0, 6.0, int(6.0 * 32000), endpoint=False)
+    sig = 0.2 * np.sin(2 * np.pi * 2000 * t)
+    try:
+        sf.write(str(mp3), sig.astype(np.float32), 32000, format="MP3")
+    except Exception:
+        import pytest
+
+        pytest.skip("libsndfile build cannot encode MP3")
+    with TestClient(app) as client:
+        with open(mp3, "rb") as fh:
+            resp = client.post("/api/predict", files={"file": ("tone.mp3", fh, "audio/mpeg")})
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["n_windows"] >= 1

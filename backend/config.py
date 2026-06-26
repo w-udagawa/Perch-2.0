@@ -19,10 +19,10 @@ def _env_bool(name: str, default: bool = False) -> bool:
     return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
-# Audio extensions libsndfile can decode without ffmpeg. mp3/m4a are
-# intentionally excluded because they require an ffmpeg backend (not installed
-# in the default environment).
-DEFAULT_EXTENSIONS = (".wav", ".flac", ".ogg", ".oga", ".aif", ".aiff")
+# Audio extensions libsndfile can decode. MP3 works through libsndfile's bundled
+# MPEG component (soundfile >= 0.13), so no ffmpeg is required. m4a/AAC stay
+# excluded because libsndfile cannot decode them.
+DEFAULT_EXTENSIONS = (".wav", ".flac", ".ogg", ".oga", ".aif", ".aiff", ".mp3")
 
 
 @dataclass(frozen=True)

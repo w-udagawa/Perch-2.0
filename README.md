@@ -13,7 +13,7 @@ Google DeepMind の生物音響基盤モデル **[Perch 2.0](https://github.com/
 ## できること / アーキテクチャ
 
 ```
-[ブラウザ] --音声(WAV/FLAC/OGG)--> [FastAPI] --32kHz mono 5秒窓--> [Perch 2.0]
+[ブラウザ] --音声(WAV/FLAC/OGG/MP3)--> [FastAPI] --32kHz mono 5秒窓--> [Perch 2.0]
     ^                                                                  |
     └── 種名・時間帯・確信度(JSON) ◄── 学名整形 ◄── sigmoid(logits) ◄──┘
 ```
@@ -123,7 +123,7 @@ pytest          # モック・モードで完結（DL 不要）
 ## 制限事項・今後の拡張
 
 - **対象**: 鳥類・陸上生物。海洋生物（クジラ等）は内蔵ヘッド非対応 → embeddings + カスタム学習（perch-hoplite のアジャイルモデリング）で拡張可能。
-- **音声形式**: WAV/FLAC/OGG/AIFF（libsndfile）。**MP3/M4A は ffmpeg が必要**で本構成では非対応。
+- **音声形式**: WAV/FLAC/OGG/AIFF/**MP3**（libsndfile の MPEG コンポーネントで対応、ffmpeg 不要）。M4A/AAC は libsndfile 非対応のため対象外。
 - **ラベル**: 学名（iNaturalist）。英名・**和名**は eBird/iNaturalist 等との外部結合が必要（未実装）。
 - **スコア**: logits を sigmoid 変換したマルチラベル確率。較正済みの絶対確率ではないため、しきい値はデータに応じて調整してください。
 - **実行時に要確認**（実モデル接続時）: logits dict のキー名、活性化の有無、出力テンソルの channel 軸形状。コードは `next(iter(...))`・`squeeze` で防御的に処理しています。

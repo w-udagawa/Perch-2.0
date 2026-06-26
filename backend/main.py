@@ -83,7 +83,7 @@ async def predict(
         raise HTTPException(
             status_code=400,
             detail=f"Unsupported file type '{ext}'. Allowed: {allowed}. "
-            "(MP3/M4A need an ffmpeg backend, which is not enabled.)",
+            "(M4A/AAC are not supported — libsndfile cannot decode them.)",
         )
 
     data = await file.read()

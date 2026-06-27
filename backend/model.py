@@ -1,20 +1,24 @@
 """Perch 2.0 model wrappers and inference.
 
-Two interchangeable backends implement the same tiny interface
-(``sample_rate``, ``window_seconds``, ``window_samples``, ``class_ids`` and
-``infer(waveform) -> scores[n_windows, n_classes]``):
+Two interchangeable backends share one small interface — the class attributes
+``sample_rate`` / ``window_seconds`` / ``window_samples``, the instance
+attributes ``class_ids`` / ``common_names`` and ``infer(waveform)``:
 
-* :class:`MockPerchModel` — a deterministic stand-in that needs no weights.
-  Enabled with ``PERCH_MOCK=1``. Lets the full pipeline (upload → decode →
-  window → score → API → UI) be exercised anywhere, including environments
-  where the Kaggle model download is blocked.
+* :class:`MockPerchModel` — a deterministic, weight-free stand-in (enabled with
+  ``PERCH_MOCK=1``). Lets the full pipeline (upload → decode → window → score →
+  API → UI) be exercised anywhere, including environments where the Kaggle model
+  download is blocked. NOT a real classifier — its labels are illustrative.
 * :class:`HopliteModel` — the real Perch 2.0, loaded through ``perch-hoplite``.
   Downloads the weights from Kaggle on first use (network access required).
 
-Perch 2.0 consumes 5-second windows of 32 kHz mono audio and emits, per window,
-a vector of per-class scores over ~14.8k taxa. The wrapper turns the raw model
-logits into [0, 1] probabilities with a sigmoid (the classifier is multi-label:
-several species can be present in the same window).
+``infer`` returns **raw per-class logits** shaped ``[n_windows, n_classes]``.
+Callers turn them into [0, 1] probabilities with :func:`sigmoid`. The raw logits
+are kept alongside the probability because the sigmoid saturates near 1.0 for
+confident detections (several top species all read ~1.000), so the logit is the
+more discriminative ranking and display signal.
+
+Perch 2.0 consumes 5-second windows of 32 kHz mono audio and scores ~14.8k taxa
+per window. It is multi-label: several species can be present in one window.
 """
 
 from __future__ import annotations
@@ -52,24 +56,44 @@ def frame_audio(waveform: np.ndarray, window_samples: int = WINDOW_SAMPLES) -> n
     return waveform.reshape(n_windows, window_samples)
 
 
-def _sigmoid(x: np.ndarray) -> np.ndarray:
-    return 1.0 / (1.0 + np.exp(-x))
+def sigmoid(x: np.ndarray) -> np.ndarray:
+    """Map raw logits to [0, 1] probabilities (multi-label, per class)."""
+    return 1.0 / (1.0 + np.exp(-np.asarray(x, dtype=np.float32)))
 
 
-class MockPerchModel:
-    """Deterministic, weight-free stand-in for Perch 2.0.
+class PerchBackend:
+    """Common spec shared by the interchangeable backends.
 
-    Produces reproducible, energy-modulated scores over a small catalogue of
-    common backyard species so the end-to-end app can be demonstrated without
-    downloading the real model. NOT a real classifier — labels are illustrative.
+    Subclasses set ``backend`` and populate ``class_ids`` (and optionally
+    ``common_names``), then implement :meth:`infer` to return raw per-class
+    logits shaped ``[n_windows, n_classes]``.
     """
 
-    backend = "mock"
+    backend = "base"
     sample_rate = SAMPLE_RATE
     window_seconds = WINDOW_SECONDS
     window_samples = WINDOW_SAMPLES
 
     def __init__(self) -> None:
+        self.class_ids: list[str] = []
+        self.common_names: dict[str, str] = {}
+
+    def infer(self, waveform: np.ndarray) -> np.ndarray:  # pragma: no cover
+        raise NotImplementedError
+
+
+class MockPerchModel(PerchBackend):
+    """Deterministic, weight-free stand-in for Perch 2.0.
+
+    Produces reproducible, energy-modulated logits over a small catalogue of
+    common backyard species so the end-to-end app can be demonstrated without
+    downloading the real model. NOT a real classifier — labels are illustrative.
+    """
+
+    backend = "mock"
+
+    def __init__(self) -> None:
+        super().__init__()
         catalog = [
             ("turdus_migratorius", "American Robin"),
             ("cardinalis_cardinalis", "Northern Cardinal"),
@@ -89,31 +113,30 @@ class MockPerchModel:
         frames = frame_audio(waveform, self.window_samples)
         n_windows = frames.shape[0]
         n_classes = len(self.class_ids)
-        scores = np.zeros((n_windows, n_classes), dtype=np.float32)
+        # Energy-modulated logits: silence -> strongly negative (sigmoid ~ 0, so
+        # nothing is detected); louder windows lift 1-2 species into positives.
+        logits = np.full((n_windows, n_classes), -6.0, dtype=np.float32)
         for w in range(n_windows):
             rms = float(np.sqrt(np.mean(frames[w] ** 2)) + 1e-8)
-            energy = min(1.0, rms * 8.0)  # silence -> ~0, so nothing is detected
+            energy = min(1.0, rms * 8.0)
             for c in range(n_classes):
                 phase = math.sin((w + 1) * (c + 1) * 1.7) * 0.5 + 0.5
-                score = energy * phase
-                if (w + c) % n_classes < 2:  # make 1-2 species stand out per window
-                    score = min(1.0, score + 0.4 * energy)
-                scores[w, c] = score
-        return scores
+                logit = -6.0 + energy * (2.0 + phase * 10.0)
+                if (w + c) % n_classes < 2:  # make 1-2 species stand out
+                    logit += 4.0 * energy
+                logits[w, c] = logit
+        return logits
 
 
-class HopliteModel:
+class HopliteModel(PerchBackend):
     """Wraps a loaded perch-hoplite model and exposes the common interface."""
 
     backend = "perch-hoplite"
-    sample_rate = SAMPLE_RATE
-    window_seconds = WINDOW_SECONDS
-    window_samples = WINDOW_SAMPLES
 
     def __init__(self, model) -> None:
+        super().__init__()
         self._model = model
         self._lock = threading.Lock()  # TF SavedModels are not thread-safe
-        self.common_names: dict[str, str] = {}
         self._logit_key, self.class_ids = self._discover()
 
     def _discover(self) -> tuple[str, list[str]]:
@@ -176,10 +199,10 @@ class HopliteModel:
             arr = arr[None, :]
         elif arr.ndim > 2:
             arr = arr.reshape(arr.shape[0], -1)
-        return _sigmoid(arr)
+        return arr  # raw logits; the service applies sigmoid for [0, 1] scores
 
 
-def load_model(settings) -> "MockPerchModel | HopliteModel":
+def load_model(settings) -> PerchBackend:
     """Construct the configured model backend."""
     if settings.mock:
         return MockPerchModel()

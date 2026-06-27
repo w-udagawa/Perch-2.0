@@ -50,6 +50,14 @@ uvicorn backend.main:app                # PERCH_MOCK は付けない
 
 初回起動時に Kaggle Models から重みが `~/.cache/kagglehub/` にダウンロードされます。
 
+Web を立てずに**コマンドラインで識別**することもできます（実モデル / モック共通）:
+
+```bash
+python scripts/classify.py recording.wav                 # 実モデル
+python scripts/classify.py --top-k 8 a.mp3 b.flac        # 複数ファイル・上位8件
+PERCH_MOCK=1 python scripts/classify.py sample.wav       # モック
+```
+
 ---
 
 ## ⚠️ ネットワーク要件（重要）
@@ -57,8 +65,10 @@ uvicorn backend.main:app                # PERCH_MOCK は付けない
 実モデルの重みは **Kaggle Models から取得**します。`pip` のパッケージ取得とは別に、
 実行環境から **kaggle.com への HTTPS アクセスが必要**です。
 
-- このリポジトリが生成された**サンドボックス実行環境では Kaggle への egress が組織ポリシーで遮断**されており、
-  実モデルのダウンロードはできませんでした（HuggingFace ミラーも同様に遮断）。そのため動作確認は**モック・モードで実施**しています。
+- 既定の**サンドボックス実行環境では Kaggle への egress が組織ポリシーで遮断**されています。
+  ネットワークポリシーで `kaggle.com` と `storage.googleapis.com`（または `*.googleapis.com`）を許可すれば、
+  実モデルが匿名ダウンロードで動作します（公開モデルのため認証は不要なことが多い）。許可しない場合は
+  **モック・モード**で全パイプライン（アップロード→デコード→窓→スコア→API→UI）を確認できます。
 - **オフライン / 制限環境での実モデル運用**: Kaggle にアクセスできる別マシンで
   `python scripts/download_model.py` を実行し、生成された `~/.cache/kagglehub/` を
   実行環境にコピーすれば、`load_model_by_name('perch_v2')` がそのキャッシュを使ってオフラインで動作します
@@ -85,17 +95,19 @@ uvicorn backend.main:app                # PERCH_MOCK は付けない
   "n_windows": 6,
   "backend": "perch-hoplite",
   "summary": [
-    {"class_id": "turdus_migratorius", "scientific_name": "Turdus migratorius",
-     "common_name": null, "max_score": 0.93, "n_windows": 4}
+    {"class_id": "Buteo buteo", "scientific_name": "Buteo buteo",
+     "common_name": null, "max_score": 0.9998, "max_logit": 8.77, "n_windows": 2}
   ],
   "windows": [
     {"index": 0, "start": 0.0, "end": 5.0, "detections": [
-      {"class_id": "turdus_migratorius", "scientific_name": "Turdus migratorius",
-       "common_name": null, "score": 0.93}
+      {"class_id": "Buteo buteo", "scientific_name": "Buteo buteo",
+       "common_name": null, "score": 0.9998, "logit": 8.77}
     ]}
   ]
 }
 ```
+
+`summary` は `max_logit` の降順。`score` は sigmoid 確率で、確信度の高い種は 1.0 付近に飽和するため、**順位付け・表示の主指標は `logit`**（生のロジット）です。
 
 ---
 
@@ -125,7 +137,7 @@ pytest          # モック・モードで完結（DL 不要）
 - **対象**: 鳥類・陸上生物。海洋生物（クジラ等）は内蔵ヘッド非対応 → embeddings + カスタム学習（perch-hoplite のアジャイルモデリング）で拡張可能。
 - **音声形式**: WAV/FLAC/OGG/AIFF/**MP3**（libsndfile の MPEG コンポーネントで対応、ffmpeg 不要）。M4A/AAC は libsndfile 非対応のため対象外。
 - **ラベル**: 学名（iNaturalist）。英名・**和名**は eBird/iNaturalist 等との外部結合が必要（未実装）。
-- **スコア**: logits を sigmoid 変換したマルチラベル確率。較正済みの絶対確率ではないため、しきい値はデータに応じて調整してください。
+- **スコア**: 各検出は生の `logit` と sigmoid 確率 `score` の両方を返します。確信度の高い種は sigmoid が 1.0 付近に飽和して見分けがつかないため、**順位付け・表示は `logit`**（summary は `max_logit` 降順）。`score` は較正済みの絶対確率ではないので、しきい値はデータに応じて調整してください。
 - **実行時に要確認**（実モデル接続時）: logits dict のキー名、活性化の有無、出力テンソルの channel 軸形状。コードは `next(iter(...))`・`squeeze` で防御的に処理しています。
 
 ## ライセンス

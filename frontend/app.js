@@ -97,12 +97,15 @@ function render(data) {
   if (data.summary.length === 0) {
     tbody.innerHTML = `<tr><td colspan="4" class="empty">No species above the threshold. Try lowering it.</td></tr>`;
   }
+  // Bars are scaled relative to the strongest logit so the top species separate
+  // (sigmoid probabilities saturate near 1.0 and would all look identical).
+  const topLogit = Math.max(0.0001, ...data.summary.map((s) => s.max_logit));
   for (const s of data.summary) {
     const tr = document.createElement("tr");
     tr.innerHTML =
       `<td>${escapeHtml(s.common_name || "—")}</td>` +
       `<td class="sci">${escapeHtml(s.scientific_name)}</td>` +
-      `<td>${confBar(s.max_score)}</td>` +
+      `<td>${confBar(s.max_logit, topLogit, s.max_score)}</td>` +
       `<td>${s.n_windows}</td>`;
     tbody.appendChild(tr);
   }
@@ -117,8 +120,8 @@ function render(data) {
     const chips = win.detections
       .map(
         (d) =>
-          `<span class="chip" title="${escapeHtml(d.scientific_name)}">` +
-          `${escapeHtml(d.common_name || d.scientific_name)} ${(d.score * 100).toFixed(0)}%</span>`
+          `<span class="chip" title="${escapeHtml(d.scientific_name)} · prob ${(d.score * 100).toFixed(1)}%">` +
+          `${escapeHtml(d.common_name || d.scientific_name)} <b>${d.logit.toFixed(1)}</b></span>`
       )
       .join("");
     div.innerHTML =
@@ -134,9 +137,12 @@ function render(data) {
   );
 }
 
-function confBar(score) {
-  const pct = Math.round(score * 100);
-  return `<div class="bar"><span style="width:${pct}%"></span><em>${pct}%</em></div>`;
+function confBar(logit, topLogit, prob) {
+  const pct = Math.max(0, Math.min(100, Math.round((logit / topLogit) * 100)));
+  return (
+    `<div class="bar" title="probability ${(prob * 100).toFixed(1)}%">` +
+    `<span style="width:${pct}%"></span><em>${logit.toFixed(1)}</em></div>`
+  );
 }
 
 function fmt(sec) {

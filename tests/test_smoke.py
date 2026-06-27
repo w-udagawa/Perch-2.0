@@ -28,12 +28,13 @@ def test_frame_audio_pads_last_window():
 
 
 def test_mock_infer_shape_and_range():
-    from backend.model import WINDOW_SAMPLES, MockPerchModel
+    from backend.model import WINDOW_SAMPLES, MockPerchModel, sigmoid
 
     model = MockPerchModel()
-    scores = model.infer(np.ones(WINDOW_SAMPLES * 2, dtype=np.float32))
-    assert scores.shape == (2, len(model.class_ids))
-    assert scores.min() >= 0.0 and scores.max() <= 1.0
+    logits = model.infer(np.ones(WINDOW_SAMPLES * 2, dtype=np.float32))
+    assert logits.shape == (2, len(model.class_ids))
+    probs = sigmoid(logits)  # logits are unbounded; probabilities are in [0, 1]
+    assert probs.min() >= 0.0 and probs.max() <= 1.0
 
 
 def test_silence_yields_no_detections():
@@ -73,7 +74,10 @@ def test_predict_endpoint(tmp_path):
         assert data["duration_sec"] > 10
         assert len(data["windows"]) == data["n_windows"]
         # tone has energy, so we expect at least one detection somewhere
-        assert sum(len(w["detections"]) for w in data["windows"]) > 0
+        dets = [d for w in data["windows"] for d in w["detections"]]
+        assert len(dets) > 0
+        assert all("logit" in d and "score" in d for d in dets)
+        assert all(s["max_logit"] is not None for s in data["summary"])
 
 
 def test_rejects_unsupported_extension(tmp_path):

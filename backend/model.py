@@ -120,8 +120,10 @@ class HopliteModel:
         """Find the species logit head and its ordered class list.
 
         Runs one dummy inference because the head's dict key is derived from a
-        bundled CSV filename (e.g. ``labels`` / ``label``) that we cannot know
-        statically. Falls back to the head with the most classes.
+        bundled CSV filename that we cannot know statically. The logits head and
+        the class list can be keyed differently — Perch 2.0 exposes the species
+        logits under ``label`` but the class list under ``labels`` — so the
+        class list is matched by name variant, then by class count.
         """
         dummy = np.zeros(self.window_samples, dtype=np.float32)
         outputs = self._model.embed(dummy)
@@ -129,16 +131,45 @@ class HopliteModel:
         keys = list(logits.keys())
         if not keys:
             raise RuntimeError("Perch model returned no logit heads")
-        key = next((k for k in _LABEL_KEY_PREFERENCES if k in keys), None)
-        if key is None:
-            key = max(keys, key=lambda k: np.asarray(logits[k]).shape[-1])
-        class_ids = [str(c) for c in self._model.class_list[key].classes]
-        return key, class_ids
+        logit_key = next((k for k in _LABEL_KEY_PREFERENCES if k in keys), None)
+        if logit_key is None:
+            logit_key = max(keys, key=lambda k: np.asarray(logits[k]).shape[-1])
+        n_classes = int(np.asarray(logits[logit_key]).shape[-1])
+        return logit_key, self._class_ids_for(logit_key, n_classes)
+
+    def _class_ids_for(self, logit_key: str, n_classes: int) -> list[str]:
+        """Resolve the ordered class list for a logit head.
+
+        The class-list key can differ from the logits key (e.g. ``label`` vs
+        ``labels``), so try name variants first, then a list whose length
+        matches the logit width, then the largest list.
+        """
+        class_list = dict(self._model.class_list)
+        if not class_list:
+            raise RuntimeError("Perch model exposed no class lists")
+
+        def classes_of(cl) -> list[str]:
+            return [str(c) for c in cl.classes]
+
+        for k in (logit_key, logit_key + "s", logit_key.rstrip("s")):
+            if k in class_list:
+                return classes_of(class_list[k])
+        for cl in class_list.values():
+            try:
+                if len(cl.classes) == n_classes:
+                    return classes_of(cl)
+            except Exception:
+                continue
+        return classes_of(max(class_list.values(), key=lambda v: len(v.classes)))
 
     def infer(self, waveform: np.ndarray) -> np.ndarray:
-        waveform = np.ascontiguousarray(waveform, dtype=np.float32)
+        # Frame to whole 5 s windows (zero-padding the last) before inference so
+        # the window count matches the rest of the app and the trailing partial
+        # window is analysed rather than dropped by the model's internal framing.
+        frames = frame_audio(waveform, self.window_samples)
+        padded = np.ascontiguousarray(frames.reshape(-1), dtype=np.float32)
         with self._lock:
-            outputs = self._model.embed(waveform)
+            outputs = self._model.embed(padded)
         arr = np.asarray(outputs.logits[self._logit_key], dtype=np.float32)
         arr = np.squeeze(arr)  # drop singleton channel axes the wrapper may add
         if arr.ndim == 1:

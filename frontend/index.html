@@ -1,40 +1,40 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ja">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Perch 2.0 — Wildlife Audio Detector</title>
+  <title>Perch 2.0 — 野生生物 音声識別</title>
   <link rel="stylesheet" href="/style.css" />
 </head>
 <body>
   <header>
-    <h1>🐦 Perch 2.0 <span class="sub">Wildlife Audio Detector</span></h1>
-    <div id="backend-badge" class="badge" title="active model backend">…</div>
+    <h1>🐦 Perch 2.0 <span class="sub">野生生物 音声識別</span></h1>
+    <div id="backend-badge" class="badge" title="現在のモデルバックエンド">…</div>
   </header>
 
   <main>
     <section class="card uploader">
       <p class="hint">
-        Upload a field recording (<strong>WAV / FLAC / OGG / MP3</strong>) to detect bird &amp;
-        terrestrial species with Google DeepMind's Perch 2.0. Audio is analysed in 5-second windows.
+        フィールド録音（<strong>WAV / FLAC / OGG / MP3 / M4A</strong>）をアップロードすると、Google DeepMind の
+        Perch 2.0 で<strong>鳥類・陸上生物の種</strong>を検出します。音声は 5 秒ごとの窓に区切って解析します。
       </p>
 
       <div id="drop" class="drop">
-        <input id="file" type="file" accept=".wav,.flac,.ogg,.oga,.aif,.aiff,.mp3" />
-        <label for="file">Choose an audio file…</label>
+        <input id="file" type="file" accept=".wav,.flac,.ogg,.oga,.aif,.aiff,.mp3,.m4a,.aac,.mp4" />
+        <label for="file">音声ファイルを選択…</label>
         <span id="filename" class="filename"></span>
       </div>
 
       <div class="controls">
         <label>
-          Confidence threshold: <output id="thr-val">0.10</output>
+          確信度しきい値: <output id="thr-val">0.10</output>
           <input id="threshold" type="range" min="0" max="1" step="0.01" value="0.10" />
         </label>
         <label>
-          Top-K / window:
+          上位K件 / 5秒窓:
           <input id="topk" type="number" min="1" max="20" value="5" />
         </label>
-        <button id="analyze" disabled>Analyze</button>
+        <button id="analyze" disabled>解析</button>
       </div>
 
       <audio id="player" controls hidden></audio>
@@ -44,21 +44,21 @@
     <section id="results" class="card" hidden>
       <div class="meta" id="meta"></div>
 
-      <h2>Detected species</h2>
+      <h2>検出された種</h2>
       <table id="summary">
         <thead>
-          <tr><th>Species</th><th>Scientific name</th><th>Confidence&nbsp;(logit)</th><th>Windows</th></tr>
+          <tr><th>種（和名）</th><th>学名</th><th>確信度&nbsp;(logit)</th><th>窓数</th></tr>
         </thead>
         <tbody></tbody>
       </table>
 
-      <h2>Timeline (per 5-second window)</h2>
+      <h2>タイムライン（5秒窓ごと）</h2>
       <div id="timeline"></div>
     </section>
   </main>
 
   <footer>
-    Off-the-shelf Perch 2.0 classifier · Apache-2.0 model · scores are multi-label sigmoid probabilities.
+    Perch 2.0 分類器（追加学習なしでそのまま利用）· Apache-2.0 モデル · スコアはマルチラベルのシグモイド確率です。
   </footer>
 
   <script src="/app.js"></script>

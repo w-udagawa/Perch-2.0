@@ -12,6 +12,7 @@ FastAPI（バックエンド）+ 静的フロントを 1 つの Docker イメー
 
 - 実モデルは初回起動時に `kagglehub` が重みを `$KAGGLEHUB_CACHE`（コンテナ内 `/home/app/.cache/kagglehub`）へ DL します。**そのパスに永続ボリュームをマウント**すれば再起動時の再 DL を避けられます。
 - CPU 実行なので GPU は不要。イメージ既定は CPU 版 `perch_v2_cpu`。
+- **対応音声形式**: WAV/FLAC/OGG/AIFF/MP3 に加え、**M4A/AAC/MP4**（iPhone 録音など）も対応。イメージに `ffmpeg` を同梱しているため追加設定は不要です。
 
 ---
 
@@ -142,3 +143,4 @@ GitHub 連携で Dockerfile から自動デプロイできます。
 - **`Failed to load Perch model … kaggle.com`**: 実行環境から `kaggle.com` / `*.googleapis.com` への HTTPS egress が必要です。閉域なら別環境で `python scripts/download_model.py` を実行して `kagglehub` キャッシュをボリュームにコピーしてください。
 - **OOM で落ちる**: RAM 不足。実モデルは 3 GB 以上を割り当ててください（無料 512 MB 系は不可）。とりあえず動作確認だけなら `PERCH_MOCK=1`。
 - **MP3 が 400 になる**: 想定外です。イメージは `soundfile` 同梱の libsndfile で MP3 を解釈します。`libsndfile1` を別途 apt 導入すると MPEG 非対応版に上書きされる場合があるため、Dockerfile では導入していません。
+- **M4A/AAC が「ffmpeg backend が無い」エラー**: m4a は libsndfile では読めず ffmpeg にフォールバックします。提供の Dockerfile は `ffmpeg` を同梱済みですが、自前ビルドで apt の `ffmpeg` を外すと m4a が使えなくなります（WAV/MP3 等は影響なし）。

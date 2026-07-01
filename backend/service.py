@@ -47,7 +47,9 @@ def run_detection(model, file_path: str, top_k: int, threshold: float) -> dict:
                 continue
             class_id = class_ids[idx]
             sci = labels.scientific_name(class_id)
-            common = common_names.get(class_id)
+            # Prefer a backend-supplied common name (the mock's English names),
+            # otherwise fall back to the Japanese 和名 for common Japanese taxa.
+            common = common_names.get(class_id) or labels.japanese_name(sci)
             logit = round(float(logits[w][idx]), 3)
             detections.append(
                 {

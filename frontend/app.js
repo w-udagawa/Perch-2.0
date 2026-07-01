@@ -19,14 +19,14 @@ fetch("/api/health")
   .then((r) => r.json())
   .then((h) => {
     const badge = $("backend-badge");
-    badge.textContent = `${h.backend} · ${h.n_classes.toLocaleString()} classes`;
+    badge.textContent = `${h.backend} · ${h.n_classes.toLocaleString()} クラス`;
     badge.classList.add(h.backend === "mock" ? "badge-mock" : "badge-real");
     if (h.backend === "mock") {
-      badge.title = "MOCK backend: illustrative labels, not the real model. Set PERCH_MOCK=0 with Kaggle access for real inference.";
+      badge.title = "モックバックエンド: ラベルはデモ用のダミーで実モデルではありません。実推論には Kaggle アクセス下で PERCH_MOCK=0 を設定してください。";
     }
   })
   .catch(() => {
-    $("backend-badge").textContent = "offline";
+    $("backend-badge").textContent = "オフライン";
   });
 
 // ---- file selection -------------------------------------------------------
@@ -50,7 +50,7 @@ thresholdInput.addEventListener("input", () => {
 analyzeBtn.addEventListener("click", async () => {
   if (!selectedFile) return;
   analyzeBtn.disabled = true;
-  setStatus("Analyzing… (first run on the real model loads weights and may take a while)", "working");
+  setStatus("解析中…（実モデルの初回は重みの読み込みに時間がかかることがあります）", "working");
   resultsEl.hidden = true;
 
   const form = new FormData();
@@ -68,9 +68,9 @@ analyzeBtn.addEventListener("click", async () => {
     }
     const data = await resp.json();
     render(data);
-    setStatus(`Done — ${data.n_windows} window(s) over ${data.duration_sec.toFixed(1)}s.`, "ok");
+    setStatus(`完了 — ${data.duration_sec.toFixed(1)} 秒を ${data.n_windows} 窓で解析しました。`, "ok");
   } catch (e) {
-    setStatus(`Error: ${e.message}`, "error");
+    setStatus(`エラー: ${e.message}`, "error");
   } finally {
     analyzeBtn.disabled = false;
   }
@@ -86,16 +86,16 @@ function render(data) {
   resultsEl.hidden = false;
 
   $("meta").innerHTML =
-    `<span>Duration: <b>${data.duration_sec.toFixed(1)}s</b></span>` +
-    `<span>Windows: <b>${data.n_windows}</b></span>` +
-    `<span>Sample rate: <b>${data.sample_rate} Hz</b></span>` +
-    `<span>Backend: <b>${data.backend}</b></span>`;
+    `<span>長さ: <b>${data.duration_sec.toFixed(1)}秒</b></span>` +
+    `<span>窓数: <b>${data.n_windows}</b></span>` +
+    `<span>サンプルレート: <b>${data.sample_rate} Hz</b></span>` +
+    `<span>バックエンド: <b>${data.backend}</b></span>`;
 
   // summary table
   const tbody = $("summary").querySelector("tbody");
   tbody.innerHTML = "";
   if (data.summary.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="4" class="empty">No species above the threshold. Try lowering it.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="4" class="empty">しきい値を超える種はありません。しきい値を下げてみてください。</td></tr>`;
   }
   // Bars are scaled relative to the strongest logit so the top species separate
   // (sigmoid probabilities saturate near 1.0 and would all look identical).
@@ -120,7 +120,7 @@ function render(data) {
     const chips = win.detections
       .map(
         (d) =>
-          `<span class="chip" title="${escapeHtml(d.scientific_name)} · prob ${(d.score * 100).toFixed(1)}%">` +
+          `<span class="chip" title="${escapeHtml(d.scientific_name)} · 確率 ${(d.score * 100).toFixed(1)}%">` +
           `${escapeHtml(d.common_name || d.scientific_name)} <b>${d.logit.toFixed(1)}</b></span>`
       )
       .join("");
@@ -140,7 +140,7 @@ function render(data) {
 function confBar(logit, topLogit, prob) {
   const pct = Math.max(0, Math.min(100, Math.round((logit / topLogit) * 100)));
   return (
-    `<div class="bar" title="probability ${(prob * 100).toFixed(1)}%">` +
+    `<div class="bar" title="確率 ${(prob * 100).toFixed(1)}%">` +
     `<span style="width:${pct}%"></span><em>${logit.toFixed(1)}</em></div>`
   );
 }

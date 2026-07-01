@@ -24,7 +24,7 @@ Google DeepMind の生物音響基盤モデル **[Perch 2.0](https://github.com/
 ## できること / アーキテクチャ
 
 ```
-[ブラウザ] --音声(WAV/FLAC/OGG/MP3)--> [FastAPI] --32kHz mono 5秒窓--> [Perch 2.0]
+[ブラウザ] --音声(WAV/FLAC/OGG/MP3/M4A)--> [FastAPI] --32kHz mono 5秒窓--> [Perch 2.0]
     ^                                                                  |
     └── 種名・時間帯・確信度(JSON) ◄── 学名整形 ◄── sigmoid(logits) ◄──┘
 ```
@@ -122,12 +122,12 @@ docker compose up --build        # → http://localhost:7860（実モデル）
   "backend": "perch-hoplite",
   "summary": [
     {"class_id": "Buteo buteo", "scientific_name": "Buteo buteo",
-     "common_name": null, "max_score": 0.9998, "max_logit": 8.77, "n_windows": 2}
+     "common_name": "ノスリ", "max_score": 0.9998, "max_logit": 8.77, "n_windows": 2}
   ],
   "windows": [
     {"index": 0, "start": 0.0, "end": 5.0, "detections": [
       {"class_id": "Buteo buteo", "scientific_name": "Buteo buteo",
-       "common_name": null, "score": 0.9998, "logit": 8.77}
+       "common_name": "ノスリ", "score": 0.9998, "logit": 8.77}
     ]}
   ]
 }
@@ -161,8 +161,8 @@ pytest          # モック・モードで完結（DL 不要）
 ## 制限事項・今後の拡張
 
 - **対象**: 鳥類・陸上生物。海洋生物（クジラ等）は内蔵ヘッド非対応 → embeddings + カスタム学習（perch-hoplite のアジャイルモデリング）で拡張可能。
-- **音声形式**: WAV/FLAC/OGG/AIFF/**MP3**（libsndfile の MPEG コンポーネントで対応、ffmpeg 不要）。M4A/AAC は libsndfile 非対応のため対象外。
-- **ラベル**: 学名（iNaturalist）。英名・**和名**は eBird/iNaturalist 等との外部結合が必要（未実装）。
+- **音声形式**: WAV/FLAC/OGG/AIFF/**MP3** は libsndfile で対応（ffmpeg 不要）。**M4A/AAC/MP4**（iPhone 録音など）は **ffmpeg フォールバック**で対応します（Docker イメージに ffmpeg を同梱。ffmpeg が無い環境ではその旨の明確なエラーを返します）。
+- **ラベル**: 学名（iNaturalist）。**和名**は日本で観察されやすい主要種を `backend/wamei.py` に同梱し「種」列に表示します（未収録種は学名のまま／英名はモック時のみ）。
 - **スコア**: 各検出は生の `logit` と sigmoid 確率 `score` の両方を返します。確信度の高い種は sigmoid が 1.0 付近に飽和して見分けがつかないため、**順位付け・表示は `logit`**（summary は `max_logit` 降順）。`score` は較正済みの絶対確率ではないので、しきい値はデータに応じて調整してください。
 - **実行時に要確認**（実モデル接続時）: logits dict のキー名、活性化の有無、出力テンソルの channel 軸形状。コードは `next(iter(...))`・`squeeze` で防御的に処理しています。
 

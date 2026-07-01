@@ -79,8 +79,10 @@ jobs:
           # exist and the upload below still works.
           try:
               api.create_repo(space, repo_type="space", space_sdk="docker", exist_ok=True)
-          except Exception as exc:  # noqa: BLE001
-              print(f"create_repo skipped ({exc}); assuming the Space already exists.")
+              print(f"Space {space} is ready.")
+          except Exception:  # noqa: BLE001
+              print(f"Note: could not create '{space}' (token is likely scoped to an "
+                    "existing Space, which is fine) — continuing to upload.")
 
           api.upload_folder(
               repo_id=space,

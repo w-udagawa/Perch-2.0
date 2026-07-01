@@ -1,0 +1,32 @@
+# Keep the build context small and the image clean.
+.git/
+.gitignore
+.github/
+
+# Python envs / caches (the .venv is gigabytes with TensorFlow — never ship it).
+.venv/
+venv/
+env/
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# Tests and docs aren't needed at runtime.
+tests/
+*.md
+!README.md
+
+# Model cache / large artifacts (re-downloaded or baked at build time).
+models/
+*.savedmodel/
+
+# Uploads / scratch / editor cruft.
+uploads/
+tmp/
+*.tmp
+samples/
+.DS_Store
+.idea/
+.vscode/

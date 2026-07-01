@@ -1,3 +1,14 @@
+---
+title: Perch 2.0 Wildlife Audio Detector
+emoji: 🐦
+colorFrom: green
+colorTo: indigo
+sdk: docker
+app_port: 7860
+pinned: false
+license: apache-2.0
+---
+
 # Perch 2.0 — 音声生息生物検出 Web アプリ
 
 Google DeepMind の生物音響基盤モデル **[Perch 2.0](https://github.com/google-research/perch-hoplite)** を使い、
@@ -57,6 +68,21 @@ python scripts/classify.py recording.wav                 # 実モデル
 python scripts/classify.py --top-k 8 a.mp3 b.flac        # 複数ファイル・上位8件
 PERCH_MOCK=1 python scripts/classify.py sample.wav       # モック
 ```
+
+---
+
+## デプロイ（Web 公開）
+
+本番用の `Dockerfile` / `docker-compose.yml` を同梱しています。**1 イメージで実モデル・モックの両対応**（`PERCH_MOCK` で切替）。サーバーは `$PORT`（既定 `7860`）を尊重します。
+
+```bash
+docker compose up --build        # → http://localhost:7860（実モデル）
+```
+
+プラットフォーム別の手順（**Hugging Face Spaces / Docker・VPS / Cloud Run / Render・Railway**）は **[DEPLOY.md](DEPLOY.md)** を参照。
+
+- 無料で実モデルを公開するなら **Hugging Face Spaces（Docker SDK）** が最適（無料 CPU 枠でも 16 GB RAM）。本 `README.md` 冒頭のフロントマターを HF がそのまま読み取ります。
+- 実モデルは **RAM 2–3 GB** と初回の Kaggle 重み DL（388 MB）が必要。`KAGGLEHUB_CACHE` に永続ボリュームを当てると再 DL を回避できます。
 
 ---
 

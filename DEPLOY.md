@@ -37,6 +37,31 @@ FastAPI（バックエンド）+ 静的フロントを 1 つの Docker イメー
 
 ---
 
+## 選択肢 A-2: GitHub Actions で HF Space へ自動デプロイ
+
+`.github/workflows/deploy-hf-space.yml` を同梱しています。トークンをローカルにも
+チャットにも出さず、**GitHub の暗号化 Secret** 経由で HF Space へ push します。
+
+**セットアップ（初回のみ）**
+
+1. HF で Space を作成（SDK = Docker / Hardware = CPU basic）。
+2. HF で **fine-grained トークン**を発行し、権限は**その 1 Space に write のみ**へスコープ。
+3. GitHub リポジトリ → **Settings → Secrets and variables → Actions**:
+   - **Secret**: `HF_TOKEN` = 発行したトークン
+   - **Variable**: `HF_SPACE_ID` = `<HFユーザー名>/<space-name>`
+
+**実行**
+
+- **手動**: Actions タブ → *Deploy to Hugging Face Space* → **Run workflow**。
+  （このボタンはワークフローが**デフォルトブランチ**にある場合に表示されます）
+- **自動**: ブランチ `claude/trusting-thompson-rjmwtt` への push で発火。Secret/Variable
+  設定後に、失敗している run を **Re-run** すればそのままデプロイされます。
+
+ワークフローは公式 Action（`actions/checkout` / `setup-python`）のみを使い、トークンは
+`huggingface_hub` が**環境変数から**読み取ります（コマンド引数に出ないためログに漏れません）。
+
+---
+
 ## 選択肢 B: Docker（自前サーバー / VPS / Fly.io など）
 
 `docker compose` が一番簡単です。

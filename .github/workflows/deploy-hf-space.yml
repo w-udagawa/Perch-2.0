@@ -1,0 +1,101 @@
+name: Deploy to Hugging Face Space
+
+# Deploys the app to a Hugging Face Space (Docker SDK).
+#
+# Setup (one time):
+#   1. Create the Space on HF (SDK = Docker, Hardware = CPU basic is fine).
+#   2. Create a *fine-grained* HF token scoped to WRITE that single Space.
+#   3. Repo → Settings → Secrets and variables → Actions:
+#        - Secret   HF_TOKEN     = <the token>
+#        - Variable HF_SPACE_ID  = <your-username>/<space-name>
+#
+# Trigger:
+#   * "Run workflow" button (workflow_dispatch) — manual, recommended. Note the
+#     button only appears once this file is on the repo's DEFAULT branch.
+#   * Push to the branch below — auto-deploys. Works immediately from this
+#     feature branch (no need to be on the default branch).
+on:
+  workflow_dispatch:
+    inputs:
+      space_id:
+        description: "HF Space as username/space-name (blank → use the HF_SPACE_ID repo variable)"
+        required: false
+        default: ""
+  push:
+    branches: [claude/trusting-thompson-rjmwtt]
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install huggingface_hub
+        run: pip install --upgrade "huggingface_hub>=0.24"
+
+      - name: Resolve Space ID
+        id: space
+        env:
+          INPUT_SPACE: ${{ github.event.inputs.space_id }}
+          VAR_SPACE: ${{ vars.HF_SPACE_ID }}
+        run: |
+          SPACE_ID="${INPUT_SPACE:-$VAR_SPACE}"
+          if [ -z "$SPACE_ID" ]; then
+            echo "::error::No Space id. Set the HF_SPACE_ID repo variable, or pass space_id when running the workflow."
+            exit 1
+          fi
+          echo "space_id=$SPACE_ID" >> "$GITHUB_OUTPUT"
+          echo "Target Space: https://huggingface.co/spaces/$SPACE_ID"
+
+      - name: Deploy to HF Space
+        env:
+          # Token is read from the environment by huggingface_hub — never passed
+          # on a command line, so it cannot leak into the logs.
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          SPACE_ID: ${{ steps.space.outputs.space_id }}
+        run: |
+          if [ -z "$HF_TOKEN" ]; then
+            echo "::error::Missing HF_TOKEN secret. Add it under Settings → Secrets and variables → Actions."
+            exit 1
+          fi
+          python - <<'PY'
+          import os
+          from huggingface_hub import HfApi
+
+          api = HfApi(token=os.environ["HF_TOKEN"])
+          space = os.environ["SPACE_ID"]
+
+          # Create the Space if it doesn't exist yet. Best-effort: a Space-scoped
+          # token may lack create permission, in which case the Space must already
+          # exist and the upload below still works.
+          try:
+              api.create_repo(space, repo_type="space", space_sdk="docker", exist_ok=True)
+          except Exception as exc:  # noqa: BLE001
+              print(f"create_repo skipped ({exc}); assuming the Space already exists.")
+
+          api.upload_folder(
+              repo_id=space,
+              repo_type="space",
+              folder_path=".",
+              commit_message="Deploy from GitHub Actions",
+              ignore_patterns=[
+                  ".git*",                       # .git/, .gitignore, .gitattributes, .github/
+                  ".venv*", "venv*",
+                  "*__pycache__*", "*.pyc",
+                  ".pytest_cache*",
+                  "tests*",
+                  "samples*",
+                  "*.tmp",
+              ],
+          )
+          print(f"Deployed. Watch the build at https://huggingface.co/spaces/{space}")
+          PY

@@ -10,11 +10,12 @@
 FROM python:3.11-slim
 
 # libgomp1: OpenMP runtime TensorFlow/numpy link against at import time.
+# ffmpeg: decodes formats libsndfile can't (m4a/AAC, e.g. iPhone recordings).
 # NOTE: we deliberately do NOT apt-install libsndfile — the `soundfile` wheel
 # bundles its own libsndfile with the MPEG component, which is what gives us
 # native MP3 decoding. A distro libsndfile could shadow it and drop MP3 support.
 RUN apt-get update \
- && apt-get install -y --no-install-recommends libgomp1 \
+ && apt-get install -y --no-install-recommends libgomp1 ffmpeg \
  && rm -rf /var/lib/apt/lists/*
 
 # Non-root user. UID 1000 is what Hugging Face Spaces expects.

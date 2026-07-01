@@ -19,10 +19,14 @@ def _env_bool(name: str, default: bool = False) -> bool:
     return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
-# Audio extensions libsndfile can decode. MP3 works through libsndfile's bundled
-# MPEG component (soundfile >= 0.13), so no ffmpeg is required. m4a/AAC stay
-# excluded because libsndfile cannot decode them.
-DEFAULT_EXTENSIONS = (".wav", ".flac", ".ogg", ".oga", ".aif", ".aiff", ".mp3")
+# Accepted upload extensions. WAV/FLAC/OGG/AIFF and MP3 decode via libsndfile
+# (MP3 through its bundled MPEG component — no ffmpeg needed). m4a/AAC/mp4 need an
+# ffmpeg backend, which the audio layer falls back to when it is available (the
+# Docker image ships ffmpeg); without it, those uploads return a clear error.
+DEFAULT_EXTENSIONS = (
+    ".wav", ".flac", ".ogg", ".oga", ".aif", ".aiff", ".mp3",  # libsndfile
+    ".m4a", ".aac", ".mp4",  # via ffmpeg fallback
+)
 
 
 @dataclass(frozen=True)

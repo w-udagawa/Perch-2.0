@@ -82,8 +82,7 @@ async def predict(
         allowed = ", ".join(settings.allowed_extensions)
         raise HTTPException(
             status_code=400,
-            detail=f"Unsupported file type '{ext}'. Allowed: {allowed}. "
-            "(M4A/AAC are not supported — libsndfile cannot decode them.)",
+            detail=f"Unsupported file type '{ext}'. Allowed: {allowed}.",
         )
 
     data = await file.read()

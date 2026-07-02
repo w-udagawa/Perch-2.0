@@ -87,6 +87,7 @@ async def predict(
     file: UploadFile = File(...),
     top_k: int | None = Query(default=None, ge=1, le=20),
     threshold: float | None = Query(default=None, ge=0.0, le=1.0),
+    region_boost: bool = Query(default=False, description="Favour species on the Japan checklist when ranking"),
 ) -> dict:
     model, settings = _require_ready()
     ext, data = await _read_upload(file, settings)
@@ -101,6 +102,7 @@ async def predict(
             tmp.name,
             top_k=top_k or settings.top_k,
             threshold=settings.threshold if threshold is None else threshold,
+            region_boost=region_boost,
         )
     except AudioDecodeError as exc:
         raise HTTPException(status_code=400, detail=f"Could not decode audio: {exc}")

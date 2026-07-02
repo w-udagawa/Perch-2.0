@@ -28,6 +28,11 @@ def main() -> int:
     parser.add_argument("audio", nargs="+", help="audio file(s): wav/flac/ogg/aiff/mp3")
     parser.add_argument("--top-k", type=int, default=None, help="top detections per 5 s window")
     parser.add_argument("--threshold", type=float, default=None, help="min probability to report")
+    parser.add_argument(
+        "--region-boost",
+        action="store_true",
+        help="favour species on the Japan checklist (backend.wamei) when ranking; reported scores are unaffected",
+    )
     args = parser.parse_args()
 
     settings = get_settings()
@@ -47,7 +52,7 @@ def main() -> int:
             print(f"  ! not found: {path}", file=sys.stderr)
             exit_code = 1
             continue
-        result = run_detection(model, path, top_k=top_k, threshold=threshold)
+        result = run_detection(model, path, top_k=top_k, threshold=threshold, region_boost=args.region_boost)
         print(f"\n{os.path.basename(path)}  ({result['duration_sec']}s, {result['n_windows']} window(s))")
         if not result["summary"]:
             print("  (no detections above threshold)")

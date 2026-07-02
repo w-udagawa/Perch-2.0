@@ -20,12 +20,15 @@ def _env_bool(name: str, default: bool = False) -> bool:
 
 
 # Accepted upload extensions. WAV/FLAC/OGG/AIFF and MP3 decode via libsndfile
-# (MP3 through its bundled MPEG component — no ffmpeg needed). m4a/AAC/mp4 need an
-# ffmpeg backend, which the audio layer falls back to when it is available (the
-# Docker image ships ffmpeg); without it, those uploads return a clear error.
+# (MP3 through its bundled MPEG component — no ffmpeg needed). m4a/AAC/mp4/webm
+# need an ffmpeg backend, which the audio layer falls back to when it is available
+# (the Docker image ships ffmpeg); without it, those uploads return a clear error.
+# webm is what browsers' MediaRecorder API produces (used by the in-browser
+# recording feature), so it needs to be accepted even though it isn't a format
+# anyone would normally upload from disk.
 DEFAULT_EXTENSIONS = (
     ".wav", ".flac", ".ogg", ".oga", ".aif", ".aiff", ".mp3",  # libsndfile
-    ".m4a", ".aac", ".mp4",  # via ffmpeg fallback
+    ".m4a", ".aac", ".mp4", ".webm",  # via ffmpeg fallback
 )
 
 

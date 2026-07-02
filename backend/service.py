@@ -13,6 +13,19 @@ import numpy as np
 from . import labels
 from .audio import load_audio
 from .model import sigmoid
+from .wamei import WAMEI
+
+# Perch has no notion of geographic range, so a Japanese recording of a common
+# local species can be outranked by an acoustically-similar species from
+# elsewhere in its ~14.8k-taxon catalogue. As a pragmatic (not scientific) fix,
+# ``region_boost`` nudges the *ranking* toward species on our curated Japan
+# checklist (backend.wamei.WAMEI) by this many logit units — enough to move a
+# regionally-plausible species up a few ranks without ever touching the
+# reported score/logit, which always reflect the model's true, un-nudged
+# output. There is no seasonal component: we have no reliable per-species
+# migration-timing data source, and fabricating one would be actively
+# misleading for a real identification tool.
+REGION_BONUS = 2.0
 
 
 def _top_k_indices(row: np.ndarray, k: int) -> np.ndarray:
@@ -22,8 +35,20 @@ def _top_k_indices(row: np.ndarray, k: int) -> np.ndarray:
     return idx[np.argsort(row[idx])[::-1]]
 
 
-def run_detection(model, file_path: str, top_k: int, threshold: float) -> dict:
-    """Run Perch detection on a single audio file and build the JSON payload."""
+def run_detection(
+    model,
+    file_path: str,
+    top_k: int,
+    threshold: float,
+    region_boost: bool = False,
+) -> dict:
+    """Run Perch detection on a single audio file and build the JSON payload.
+
+    ``region_boost``, when true, favours species on the curated Japan checklist
+    (:data:`backend.wamei.WAMEI`) when picking each window's top-k — see
+    :data:`REGION_BONUS`. Reported ``score``/``logit`` values are always the
+    model's true, unmodified output; only which classes make the cut changes.
+    """
     waveform, sample_rate = load_audio(file_path, model.sample_rate)
     duration = len(waveform) / float(sample_rate)
 
@@ -34,6 +59,12 @@ def run_detection(model, file_path: str, top_k: int, threshold: float) -> dict:
     window_seconds = model.window_seconds
     n_windows = int(scores.shape[0])
 
+    # Per-class "is this on the Japan checklist" mask, computed once per request.
+    in_region = np.fromiter(
+        (labels.scientific_name(cid) in WAMEI for cid in class_ids), dtype=bool, count=len(class_ids)
+    )
+    rank_logits = logits + (REGION_BONUS * in_region) if region_boost else logits
+
     windows: list[dict] = []
     summary: dict[str, dict] = {}
 
@@ -41,8 +72,8 @@ def run_detection(model, file_path: str, top_k: int, threshold: float) -> dict:
         start = round(w * window_seconds, 3)
         end = round(min((w + 1) * window_seconds, duration) if duration else (w + 1) * window_seconds, 3)
         detections: list[dict] = []
-        for idx in _top_k_indices(logits[w], top_k):  # rank by logit (no saturation ties)
-            score = round(float(scores[w][idx]), 4)
+        for idx in _top_k_indices(rank_logits[w], top_k):  # rank by (boosted) logit
+            score = round(float(scores[w][idx]), 4)  # true, unboosted probability
             if score < threshold:
                 continue
             class_id = class_ids[idx]
@@ -50,7 +81,8 @@ def run_detection(model, file_path: str, top_k: int, threshold: float) -> dict:
             # Prefer a backend-supplied common name (the mock's English names),
             # otherwise fall back to the Japanese 和名 for common Japanese taxa.
             common = common_names.get(class_id) or labels.japanese_name(sci)
-            logit = round(float(logits[w][idx]), 3)
+            logit = round(float(logits[w][idx]), 3)  # true, unboosted logit
+            region = bool(in_region[idx])
             detections.append(
                 {
                     "class_id": class_id,
@@ -58,6 +90,7 @@ def run_detection(model, file_path: str, top_k: int, threshold: float) -> dict:
                     "common_name": common,
                     "score": score,
                     "logit": logit,
+                    "in_region": region,
                 }
             )
             entry = summary.setdefault(
@@ -69,6 +102,7 @@ def run_detection(model, file_path: str, top_k: int, threshold: float) -> dict:
                     "max_score": 0.0,
                     "max_logit": float("-inf"),
                     "n_windows": 0,
+                    "in_region": region,
                 },
             )
             entry["max_score"] = max(entry["max_score"], score)
@@ -84,6 +118,7 @@ def run_detection(model, file_path: str, top_k: int, threshold: float) -> dict:
         "window_seconds": window_seconds,
         "n_windows": n_windows,
         "backend": getattr(model, "backend", "unknown"),
+        "region_boost": region_boost,
         "summary": summary_list,
         "windows": windows,
     }

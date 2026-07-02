@@ -9,8 +9,9 @@ class Detection(BaseModel):
     class_id: str
     scientific_name: str
     common_name: str | None = None
-    score: float  # sigmoid probability in [0, 1]
-    logit: float  # raw model logit (discriminative ranking signal)
+    score: float  # sigmoid probability in [0, 1] (never boosted)
+    logit: float  # raw model logit (never boosted; discriminative ranking signal)
+    in_region: bool = False  # on the curated Japan checklist (backend.wamei.WAMEI)
 
 
 class WindowResult(BaseModel):
@@ -27,6 +28,7 @@ class SummaryItem(BaseModel):
     max_score: float  # highest sigmoid probability across windows
     max_logit: float  # highest raw logit across windows (summary is sorted by this)
     n_windows: int
+    in_region: bool = False
 
 
 class PredictResponse(BaseModel):
@@ -35,6 +37,7 @@ class PredictResponse(BaseModel):
     window_seconds: float
     n_windows: int
     backend: str
+    region_boost: bool = False
     summary: list[SummaryItem]
     windows: list[WindowResult]
 

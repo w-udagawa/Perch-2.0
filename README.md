@@ -30,9 +30,10 @@ Google DeepMind の生物音響基盤モデル **[Perch 2.0](https://github.com/
 ```
 
 - **バックエンド**: FastAPI。起動時にモデルを 1 回ロードして再利用（TF はスレッド非安全なため lock でシリアライズ）。
-- **音声処理**: `soundfile`(libsndfile 同梱) + `soxr` で 32 kHz モノラルへ統一。
-- **フロントエンド**: 素の HTML/JS（ビルド不要）。アップロード → 種一覧テーブル + 5 秒窓タイムライン + 該当時刻へシークできる音声プレイヤー。
+- **音声処理**: `soundfile`(libsndfile 同梱) + `soxr` で 32 kHz モノラルへ統一。libsndfile 非対応の形式（M4A/AAC/MP4/WebM）は `ffmpeg` フォールバックで対応。
+- **フロントエンド**: 素の HTML/JS（ビルド不要）。ファイル選択・**ドラッグ&ドロップ・その場でブラウザ録音**のいずれからも解析でき、種一覧テーブル・5 秒窓タイムライン・該当時刻へシークできる音声プレイヤー・**結果の CSV/JSON エクスポート**を提供。モデル読み込み待ちや解析中は進捗表示。
 - **モデル**: Perch 2.0（`perch-hoplite` の `load_model_by_name('perch_v2')`）。入力 5 秒 / 32 kHz、出力は約 14,797 クラスのマルチラベル・スコア。
+- **地域優先ヒューリスティック**: Perch は生息域を考慮しないため、日本の録音でも無関係な地域の種が上位に来ることがあります。`region_boost` を有効にすると、`backend/data/wamei_ja.json`（日本でよく見られる種の簡易チェックリスト）に載っている種のランキングを優先します（表示される `score`/`logit` 自体は改変しません）。
 
 ---
 
@@ -64,9 +65,10 @@ uvicorn backend.main:app                # PERCH_MOCK は付けない
 Web を立てずに**コマンドラインで識別**することもできます（実モデル / モック共通）:
 
 ```bash
-python scripts/classify.py recording.wav                 # 実モデル
-python scripts/classify.py --top-k 8 a.mp3 b.flac        # 複数ファイル・上位8件
-PERCH_MOCK=1 python scripts/classify.py sample.wav       # モック
+python scripts/classify.py recording.wav                        # 実モデル
+python scripts/classify.py --top-k 8 a.mp3 b.flac               # 複数ファイル・上位8件
+python scripts/classify.py --region-boost recording.wav         # 日本の種を優先してランキング
+PERCH_MOCK=1 python scripts/classify.py sample.wav              # モック
 ```
 
 ---
@@ -108,10 +110,10 @@ docker compose up --build        # → http://localhost:7860（実モデル）
 | Method | Path | 説明 |
 |---|---|---|
 | `GET` | `/api/health` | バックエンド種別・クラス数・入力仕様 |
-| `POST` | `/api/predict` | `multipart/form-data` で音声を送信。クエリ `top_k`(1–20) / `threshold`(0–1) 任意 |
+| `POST` | `/api/predict` | `multipart/form-data` で音声を送信。クエリ `top_k`(1–20) / `threshold`(0–1) / `region_boost`(bool、既定 `false`) 任意 |
 | `GET` | `/` | フロントエンド（静的配信） |
 
-`/api/predict` レスポンス例:
+`/api/predict` レスポンス例（`region_boost=true`）:
 
 ```json
 {
@@ -120,20 +122,22 @@ docker compose up --build        # → http://localhost:7860（実モデル）
   "window_seconds": 5.0,
   "n_windows": 6,
   "backend": "perch-hoplite",
+  "region_boost": true,
   "summary": [
     {"class_id": "Buteo buteo", "scientific_name": "Buteo buteo",
-     "common_name": "ノスリ", "max_score": 0.9998, "max_logit": 8.77, "n_windows": 2}
+     "common_name": "ノスリ", "max_score": 0.9998, "max_logit": 8.77,
+     "n_windows": 2, "in_region": true}
   ],
   "windows": [
     {"index": 0, "start": 0.0, "end": 5.0, "detections": [
       {"class_id": "Buteo buteo", "scientific_name": "Buteo buteo",
-       "common_name": "ノスリ", "score": 0.9998, "logit": 8.77}
+       "common_name": "ノスリ", "score": 0.9998, "logit": 8.77, "in_region": true}
     ]}
   ]
 }
 ```
 
-`summary` は `max_logit` の降順。`score` は sigmoid 確率で、確信度の高い種は 1.0 付近に飽和するため、**順位付け・表示の主指標は `logit`**（生のロジット）です。
+`summary` は `max_logit` の降順。`score` は sigmoid 確率で、確信度の高い種は 1.0 付近に飽和するため、**順位付け・表示の主指標は `logit`**（生のロジット）です。`region_boost=true` のときは各窓の上位K件選出だけがチェックリスト在籍種を優先するよう並べ替わり、**`score`/`logit` の値自体は常に非改変の実際の値**です（`in_region` でチェックリスト在籍かどうかが分かります）。
 
 ---
 
@@ -161,9 +165,10 @@ pytest          # モック・モードで完結（DL 不要）
 ## 制限事項・今後の拡張
 
 - **対象**: 鳥類・陸上生物。海洋生物（クジラ等）は内蔵ヘッド非対応 → embeddings + カスタム学習（perch-hoplite のアジャイルモデリング）で拡張可能。
-- **音声形式**: WAV/FLAC/OGG/AIFF/**MP3** は libsndfile で対応（ffmpeg 不要）。**M4A/AAC/MP4**（iPhone 録音など）は **ffmpeg フォールバック**で対応します（Docker イメージに ffmpeg を同梱。ffmpeg が無い環境ではその旨の明確なエラーを返します）。
-- **ラベル**: 学名（iNaturalist）。**和名**は日本で観察されやすい主要種を `backend/wamei.py` に同梱し「種」列に表示します（未収録種は学名のまま／英名はモック時のみ）。
+- **音声形式**: WAV/FLAC/OGG/AIFF/**MP3** は libsndfile で対応（ffmpeg 不要）。**M4A/AAC/MP4/WebM**（iPhone 録音・ブラウザ録音など）は **ffmpeg フォールバック**で対応します（Docker イメージに ffmpeg を同梱。ffmpeg が無い環境ではその旨の明確なエラーを返します）。
+- **ラベル**: 学名（iNaturalist）。**和名**は日本で観察されやすい主要種（約 300 種）を `backend/data/wamei_ja.json`（プレーンな `{学名: 和名}` の JSON、コードを触らず手編集可能）に同梱し「種」列に表示します（未収録種は学名のまま／英名はモック時のみ）。
 - **スコア**: 各検出は生の `logit` と sigmoid 確率 `score` の両方を返します。確信度の高い種は sigmoid が 1.0 付近に飽和して見分けがつかないため、**順位付け・表示は `logit`**（summary は `max_logit` 降順）。`score` は較正済みの絶対確率ではないので、しきい値はデータに応じて調整してください。
+- **地域優先ヒューリスティック（`region_boost`）**: Perch 自体は生息域・渡りの時期データを一切持たず、本アプリも eBird/GBIF 等の正確な範囲データは参照していません。`region_boost` は `backend/data/wamei_ja.json` の**簡易チェックリストに載っているかどうか**だけを見た粗いヒューリスティックで、季節性は考慮しません（信頼できるデータ源がなく、誤った渡り時期を捏造するのを避けるため意図的に非対応）。過信せず参考情報として扱ってください。
 - **実行時に要確認**（実モデル接続時）: logits dict のキー名、活性化の有無、出力テンソルの channel 軸形状。コードは `next(iter(...))`・`squeeze` で防御的に処理しています。
 
 ## ライセンス

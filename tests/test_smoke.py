@@ -175,3 +175,70 @@ def test_service_fills_japanese_common_name(tmp_path):
     result = run_detection(_Stub(), str(wav), top_k=1, threshold=0.0)
     names = {d["common_name"] for w in result["windows"] for d in w["detections"]}
     assert "メジロ" in names
+
+
+def test_webm_extension_allowed():
+    """webm is accepted (what the browser's MediaRecorder produces)."""
+    from backend.config import get_settings
+
+    assert ".webm" in get_settings().allowed_extensions
+
+
+def _region_stub():
+    """A 2-class stub: idx0 is off the Japan checklist with a higher raw logit,
+    idx1 (メジロ) is on it with a lower raw logit — so region_boost should flip
+    which one wins the window's top-1 slot without changing reported values."""
+    from backend.model import PerchBackend, frame_audio
+
+    class _Stub(PerchBackend):
+        backend = "stub"
+
+        def __init__(self):
+            super().__init__()
+            self.class_ids = ["Definitely notaspecies", "Zosterops japonicus"]
+
+        def infer(self, waveform):
+            frames = frame_audio(waveform)
+            n = frames.shape[0]
+            logits = np.zeros((n, 2), dtype=np.float32)
+            logits[:, 0] = 5.0
+            logits[:, 1] = 4.0
+            return logits
+
+    return _Stub()
+
+
+def test_region_boost_reranks_without_changing_reported_values(tmp_path):
+    from backend.service import REGION_BONUS, run_detection
+
+    wav = tmp_path / "r.wav"
+    sf.write(str(wav), np.zeros(32000 * 6, dtype=np.float32), 32000)
+    model = _region_stub()
+
+    off = run_detection(model, str(wav), top_k=1, threshold=0.0, region_boost=False)
+    assert off["windows"][0]["detections"][0]["scientific_name"] == "Definitely notaspecies"
+    assert off["region_boost"] is False
+
+    on = run_detection(model, str(wav), top_k=1, threshold=0.0, region_boost=True)
+    top = on["windows"][0]["detections"][0]
+    assert on["region_boost"] is True
+    assert top["scientific_name"] == "Zosterops japonicus"
+    assert top["in_region"] is True
+    assert top["logit"] == 4.0  # reported logit is the TRUE unboosted value
+    assert REGION_BONUS > 1.0  # sanity: bonus is what made the flip possible
+
+
+def test_predict_endpoint_region_boost_param(tmp_path):
+    from backend.main import app
+
+    wav = tmp_path / "test.wav"
+    _make_wav(str(wav))
+    with TestClient(app) as client:
+        with open(wav, "rb") as fh:
+            resp = client.post("/api/predict?region_boost=true", files={"file": ("test.wav", fh, "audio/wav")})
+        assert resp.status_code == 200, resp.text
+        data = resp.json()
+        assert data["region_boost"] is True
+        assert all("in_region" in s for s in data["summary"])
+        dets = [d for w in data["windows"] for d in w["detections"]]
+        assert all("in_region" in d for d in dets)

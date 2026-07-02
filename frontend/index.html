@@ -13,16 +13,26 @@
   </header>
 
   <main>
+    <div id="loading-banner" class="banner" hidden>
+      ⏳ モデルを読み込み中…（サーバー起動直後や実モデルの初回は数分かかることがあります）
+    </div>
+
     <section class="card uploader">
       <p class="hint">
-        フィールド録音（<strong>WAV / FLAC / OGG / MP3 / M4A</strong>）をアップロードすると、Google DeepMind の
-        Perch 2.0 で<strong>鳥類・陸上生物の種</strong>を検出します。音声は 5 秒ごとの窓に区切って解析します。
+        フィールド録音（<strong>WAV / FLAC / OGG / MP3 / M4A</strong>）をドラッグ&amp;ドロップ、選択、または
+        その場で録音すると、Google DeepMind の Perch 2.0 で<strong>鳥類・陸上生物の種</strong>を検出します。
+        音声は 5 秒ごとの窓に区切って解析します。
       </p>
 
       <div id="drop" class="drop">
-        <input id="file" type="file" accept=".wav,.flac,.ogg,.oga,.aif,.aiff,.mp3,.m4a,.aac,.mp4" />
-        <label for="file">音声ファイルを選択…</label>
+        <input id="file" type="file" accept=".wav,.flac,.ogg,.oga,.aif,.aiff,.mp3,.m4a,.aac,.mp4,.webm" />
+        <label for="file">音声ファイルを選択、またはここにドラッグ&amp;ドロップ…</label>
         <span id="filename" class="filename"></span>
+      </div>
+
+      <div class="record-row">
+        <button id="record" type="button" class="secondary">🎙 その場で録音</button>
+        <span id="record-status" class="record-status"></span>
       </div>
 
       <div class="controls">
@@ -34,15 +44,24 @@
           上位K件 / 5秒窓:
           <input id="topk" type="number" min="1" max="20" value="5" />
         </label>
+        <label class="checkbox-label" title="日本でよく見られる種のチェックリストを使い、識別のランキングを優先的に並べ替えます（正確な生息域データではなく簡易的な目安です）">
+          <input id="region-boost" type="checkbox" checked />
+          🗾 日本の野鳥を優先
+        </label>
         <button id="analyze" disabled>解析</button>
       </div>
 
       <audio id="player" controls hidden></audio>
       <div id="status" class="status"></div>
+      <div id="progress" class="progress" hidden><div class="progress-bar"></div></div>
     </section>
 
     <section id="results" class="card" hidden>
       <div class="meta" id="meta"></div>
+      <div class="export-row">
+        <button id="export-csv" type="button" class="secondary">📥 CSVダウンロード</button>
+        <button id="export-json" type="button" class="secondary">📥 JSONダウンロード</button>
+      </div>
 
       <h2>検出された種</h2>
       <table id="summary">
@@ -58,7 +77,8 @@
   </main>
 
   <footer>
-    Perch 2.0 分類器（追加学習なしでそのまま利用）· Apache-2.0 モデル · スコアはマルチラベルのシグモイド確率です。
+    Perch 2.0 分類器（追加学習なしでそのまま利用）· Apache-2.0 モデル · スコアはマルチラベルのシグモイド確率です。<br />
+    🗾 は日本でよく見られる種の簡易チェックリストに基づく目安であり、正確な生息域・渡りの時期データではありません。
   </footer>
 
   <script src="/app.js"></script>

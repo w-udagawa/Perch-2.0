@@ -19,16 +19,13 @@ from fastapi.staticfiles import StaticFiles
 
 from . import schemas, service
 from .audio import AudioDecodeError
-from .config import get_settings
-from .model import load_model
+from .config import Settings, get_settings
+from .model import PerchBackend, load_model
 
 logger = logging.getLogger("perch")
 logging.basicConfig(level=logging.INFO)
 
 FRONTEND_DIR = Path(__file__).resolve().parent.parent / "frontend"
-
-# Populated at startup by the lifespan handler.
-_state: dict = {}
 
 
 @asynccontextmanager
@@ -36,11 +33,10 @@ async def lifespan(app: FastAPI):
     settings = get_settings()
     logger.info("Loading Perch model (mock=%s, name=%s)…", settings.mock, settings.model_name)
     model = load_model(settings)
-    _state["model"] = model
-    _state["settings"] = settings
+    app.state.model = model
+    app.state.settings = settings
     logger.info("Model ready: backend=%s, %d classes", model.backend, len(model.class_ids))
     yield
-    _state.clear()
 
 
 app = FastAPI(
@@ -50,12 +46,32 @@ app = FastAPI(
 )
 
 
-@app.get("/api/health", response_model=schemas.HealthResponse)
-def health() -> schemas.HealthResponse:
-    model = _state.get("model")
-    settings = _state.get("settings")
+def _require_ready() -> tuple[PerchBackend, Settings]:
+    """Return the loaded model and settings, or raise 503 if startup isn't done."""
+    model = getattr(app.state, "model", None)
+    settings = getattr(app.state, "settings", None)
     if model is None or settings is None:
         raise HTTPException(status_code=503, detail="model not loaded")
+    return model, settings
+
+
+async def _read_upload(file: UploadFile, settings: Settings) -> tuple[str, bytes]:
+    """Validate the extension and size, returning (extension, bytes) or raising HTTP errors."""
+    ext = os.path.splitext(file.filename or "")[1].lower()
+    if ext not in settings.allowed_extensions:
+        allowed = ", ".join(settings.allowed_extensions)
+        raise HTTPException(status_code=400, detail=f"Unsupported file type '{ext}'. Allowed: {allowed}.")
+    data = await file.read()
+    if len(data) > settings.max_upload_mb * 1024 * 1024:
+        raise HTTPException(status_code=413, detail=f"File too large (> {settings.max_upload_mb} MB).")
+    if not data:
+        raise HTTPException(status_code=400, detail="Empty file.")
+    return ext, data
+
+
+@app.get("/api/health", response_model=schemas.HealthResponse)
+def health() -> schemas.HealthResponse:
+    model, settings = _require_ready()
     return schemas.HealthResponse(
         status="ok",
         backend=model.backend,
@@ -72,25 +88,8 @@ async def predict(
     top_k: int | None = Query(default=None, ge=1, le=20),
     threshold: float | None = Query(default=None, ge=0.0, le=1.0),
 ) -> dict:
-    model = _state.get("model")
-    settings = _state.get("settings")
-    if model is None or settings is None:
-        raise HTTPException(status_code=503, detail="model not loaded")
-
-    ext = os.path.splitext(file.filename or "")[1].lower()
-    if ext not in settings.allowed_extensions:
-        allowed = ", ".join(settings.allowed_extensions)
-        raise HTTPException(
-            status_code=400,
-            detail=f"Unsupported file type '{ext}'. Allowed: {allowed}.",
-        )
-
-    data = await file.read()
-    max_bytes = settings.max_upload_mb * 1024 * 1024
-    if len(data) > max_bytes:
-        raise HTTPException(status_code=413, detail=f"File too large (> {settings.max_upload_mb} MB).")
-    if not data:
-        raise HTTPException(status_code=400, detail="Empty file.")
+    model, settings = _require_ready()
+    ext, data = await _read_upload(file, settings)
 
     tmp = tempfile.NamedTemporaryFile(suffix=ext, delete=False)
     try:

@@ -2,15 +2,13 @@
 
 from __future__ import annotations
 
-from typing import Optional
-
 from pydantic import BaseModel
 
 
 class Detection(BaseModel):
     class_id: str
     scientific_name: str
-    common_name: Optional[str] = None
+    common_name: str | None = None
     score: float  # sigmoid probability in [0, 1]
     logit: float  # raw model logit (discriminative ranking signal)
 
@@ -25,7 +23,7 @@ class WindowResult(BaseModel):
 class SummaryItem(BaseModel):
     class_id: str
     scientific_name: str
-    common_name: Optional[str] = None
+    common_name: str | None = None
     max_score: float  # highest sigmoid probability across windows
     max_logit: float  # highest raw logit across windows (summary is sorted by this)
     n_windows: int

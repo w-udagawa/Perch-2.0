@@ -115,17 +115,14 @@ class MockPerchModel(PerchBackend):
         n_classes = len(self.class_ids)
         # Energy-modulated logits: silence -> strongly negative (sigmoid ~ 0, so
         # nothing is detected); louder windows lift 1-2 species into positives.
-        logits = np.full((n_windows, n_classes), -6.0, dtype=np.float32)
-        for w in range(n_windows):
-            rms = float(np.sqrt(np.mean(frames[w] ** 2)) + 1e-8)
-            energy = min(1.0, rms * 8.0)
-            for c in range(n_classes):
-                phase = math.sin((w + 1) * (c + 1) * 1.7) * 0.5 + 0.5
-                logit = -6.0 + energy * (2.0 + phase * 10.0)
-                if (w + c) % n_classes < 2:  # make 1-2 species stand out
-                    logit += 4.0 * energy
-                logits[w, c] = logit
-        return logits
+        w = np.arange(n_windows)[:, None]  # window index, column vector
+        c = np.arange(n_classes)[None, :]  # class index, row vector
+        rms = np.sqrt(np.mean(frames ** 2, axis=1)) + 1e-8  # per-window loudness
+        energy = np.minimum(1.0, rms * 8.0)[:, None]
+        phase = np.sin((w + 1) * (c + 1) * 1.7) * 0.5 + 0.5  # deterministic spread
+        logits = -6.0 + energy * (2.0 + phase * 10.0)
+        logits += np.where((w + c) % n_classes < 2, 4.0 * energy, 0.0)  # standouts
+        return logits.astype(np.float32)
 
 
 class HopliteModel(PerchBackend):
